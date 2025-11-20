@@ -1,0 +1,357 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>English Bloom Interactive</title>
+<style>
+body { font-family: Arial, sans-serif; background:#f0f0f0; margin:0; padding:0;}
+header { background:#4CAF50; color:white; padding:15px; text-align:center; }
+header a { color:white; text-decoration:none; font-weight:bold; }
+button { padding:10px 20px; margin:5px; cursor:pointer; transition:0.3s; border:none; border-radius:5px;}
+button:hover { background:#45a049; color:white; }
+.login-section, .admin-panel, .quiz-section, .modal-section { background:white; margin:20px auto; padding:20px; border-radius:10px; max-width:700px; box-shadow:0 0 15px rgba(0,0,0,0.1);}
+h2,h3 { text-align:center; }
+input, select { padding:8px; margin:5px 0; width:100%; box-sizing:border-box; }
+.quiz-question, .modal-question { margin:10px 0; }
+.correct { color:green; font-weight:bold; }
+.incorrect { color:red; font-weight:bold; }
+footer { text-align:center; padding:15px; background:#222; color:white; }
+.note { background:#fffae6; padding:10px; border-left:5px solid #ff9900; margin-bottom:15px; }
+.option-btn { display:block; margin:5px 0; padding:8px; width:100%; border:1px solid #ccc; border-radius:5px; cursor:pointer; }
+.option-btn:hover { background:#f0f0f0; }
+</style>
+</head>
+<body>
+
+<header>
+<h1>English Bloom Interactive</h1>
+<p>Created by Rahul | <a href="https://www.facebook.com/yourfb" target="_blank">My Facebook</a></p>
+</header>
+
+<div class="login-section">
+<h2>Login</h2>
+<button onclick="showLogin('student')">Student Login</button>
+<button onclick="showLogin('admin')">Admin Login</button>
+<div id="loginForm" style="display:none;">
+<input type="text" id="username" placeholder="Username">
+<input type="password" id="password" placeholder="Password">
+<button onclick="login()">Login</button>
+</div>
+</div>
+
+<div class="admin-panel" id="adminPanel" style="display:none;">
+<h2>Admin Panel</h2>
+<div class="note">Add/Delete Students and Manage Quizzes</div>
+
+<h3>Add Student</h3>
+<input type="text" id="newUser" placeholder="Username">
+<input type="password" id="newPass" placeholder="Password">
+<button onclick="addUser()">Add Student</button>
+
+<h3>Existing Students</h3>
+<ul id="userList"></ul>
+
+<h3>Quizzes</h3>
+<ul id="quizList"></ul>
+
+<h3>Add New Quiz Question</h3>
+<input type="text" id="newQuestionText" placeholder="Question text">
+<input type="text" id="newQuestionAnswer" placeholder="Answer">
+<input type="text" id="newOption1" placeholder="Option 1">
+<input type="text" id="newOption2" placeholder="Option 2">
+<input type="text" id="newOption3" placeholder="Option 3">
+<input type="text" id="newOption4" placeholder="Option 4">
+<select id="newQuestionCategory">
+<option value="Changing Sentences">Changing Sentences</option>
+<option value="Tag Questions">Tag Questions</option>
+<option value="Modal Questions">Modal Questions</option>
+</select>
+<button onclick="addQuizQuestion()">Add Quiz</button>
+
+<h3>Gemini AI English Helper</h3>
+<input type="text" id="aiQuestion" placeholder="Ask anything">
+<button onclick="askGemini()">Ask AI</button>
+<p id="aiAnswer"></p>
+</div>
+
+<div class="quiz-section" id="quizSection" style="display:none;">
+<h2 id="greeting">Take Quiz</h2>
+<div id="quizContainer"></div>
+<p id="scoreDisplay"></p>
+
+<h3>Change Password</h3>
+<input type="password" id="newStudentPass" placeholder="Enter new password">
+<button onclick="changePassword()">Update Password</button>
+<p id="passChangeMsg"></p>
+</div>
+
+<div class="modal-section" id="modalSection" style="display:none;">
+<h2>Modal Questions</h2>
+<div id="modalContainer"></div>
+</div>
+
+<footer>
+<p>Created by Rahul | <a href="https://www.facebook.com/yourfb" target="_blank">My FB</a></p>
+<p>Contact me to make your website free!</p>
+</footer>
+
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// Firebase Config
+const firebaseConfig = {
+  apiKey: "AIzaSyDL-q782llLsSxmIx0rrnvCIhRZ2CNElwI",
+  authDomain: "english-bloomm.firebaseapp.com",
+  projectId: "english-bloomm",
+  storageBucket: "english-bloomm.firebasestorage.app",
+  messagingSenderId: "135856878344",
+  appId: "1:135856878344:web:a39ad6074dcaf269fab2bd",
+  measurementId: "G-0HDP3QMN0R"
+};
+firebase.initializeApp(firebaseConfig);
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+// Admin Credentials
+const adminEmail = "ff4572659@gmail.com";
+const adminPass = "rah28hul";
+
+// Gemini API Key
+const GEMINI_API_KEY = "AIzaSyAdmyTR2AzXsbTV4NUbB72YDcOozB0XhtU";
+
+// Users
+let users = [
+{username:"admin", password:adminPass, type:"admin", email:adminEmail}
+];
+
+// Preloaded quizzes (50 MCQs) - examples, fill all 50 similarly
+let quizzes = [
+{
+category:"Changing Sentences",
+questions:[
+{question:"Hasan Sir is playing football. Convert to negative.", answer:"Hasan Sir is not playing football", options:["Hasan Sir is playing football","Hasan Sir is not playing football","Has Hasan Sir playing football","Has Hasan Sir not playing football"]},
+{question:"Momo went to the market. Make it interrogative.", answer:"Did Momo go to the market?", options:["Momo went to the market?","Did Momo went to the market?","Did Momo go to the market?","Momo do go to the market?"]},
+// ... add more until 17
+]
+},
+{
+category:"Tag Questions",
+questions:[
+{question:"Rahul is a good student, ...?", answer:"isn't he?", options:["is he?","isn't he?","does he?","doesn't he?"]},
+{question:"Prionti likes mangoes, ...?", answer:"doesn't she?", options:["does she?","doesn't she?","isn't she?","is she?"]},
+// ... add more until 17
+]
+},
+{
+category:"Modal Questions",
+questions:[
+{question:"Mrittika ___ play the piano when she was young.", answer:"could", options:["can","could","must","should"]},
+{question:"Ayat ___ finish homework before dinner.", answer:"must", options:["may","must","can","should"]},
+// ... add more until 16
+]
+}
+];
+
+// Modal Questions - 25 example questions
+let modalQs = [
+{question:"Rahul should ___ submit the assignment.", answer:"must"},
+{question:"Momo could ___ solve the puzzle.", answer:"could"},
+{question:"Prionti may ___ join the class late.", answer:"may"},
+// ... add more until 25
+];
+
+// Login
+function showLogin(type){
+document.getElementById('loginForm').style.display='block';
+document.getElementById('loginForm').dataset.type=type;
+}
+
+function login(){
+const username=document.getElementById('username').value;
+const password=document.getElementById('password').value;
+const type=document.getElementById('loginForm').dataset.type;
+if(type==='admin'){
+if(username===adminEmail && password===adminPass){
+alert("Admin login successful");
+document.getElementById('adminPanel').style.display='block';
+document.getElementById('quizSection').style.display='none';
+document.getElementById('modalSection').style.display='none';
+loadUsers();
+loadQuizzes();
+}else{ alert("Wrong admin credentials"); }
+}else{
+const student=users.find(u=>u.username===username && u.password===password && u.type==="student");
+if(student){
+alert("Student login successful");
+document.getElementById('quizSection').style.display='block';
+document.getElementById('modalSection').style.display='block';
+document.getElementById('adminPanel').style.display='none';
+document.getElementById('greeting').textContent="Welcome, "+username+"! Ready to test your English?";
+shuffleQuizzes();
+showQuiz();
+showModalQuestions();
+}else{ alert("Wrong student credentials"); }
+}
+}
+
+// Add student
+function addUser(){
+const username=document.getElementById('newUser').value;
+const password=document.getElementById('newPass').value;
+if(username && password){
+users.push({username,password,type:"student"});
+loadUsers();
+document.getElementById('newUser').value='';
+document.getElementById('newPass').value='';
+alert("Student added");
+}
+}
+
+function loadUsers(){
+const list=document.getElementById('userList'); list.innerHTML='';
+users.forEach((u,i)=>{
+if(u.type==='student'){
+const li=document.createElement('li'); li.textContent=u.username+" ";
+const btn=document.createElement('button'); btn.textContent="Delete";
+btn.onclick=()=>{ users.splice(i,1); loadUsers(); }
+li.appendChild(btn); list.appendChild(li);
+}
+});
+}
+
+// Quizzes
+function shuffleQuizzes(){
+quizzes.forEach(cat=>{
+for(let i=cat.questions.length-1;i>0;i--){
+let j=Math.floor(Math.random()*(i+1));
+[cat.questions[i], cat.questions[j]]=[cat.questions[j], cat.questions[i]];
+}
+});
+}
+
+function showQuiz(){
+const container=document.getElementById('quizContainer'); container.innerHTML='';
+quizzes.forEach(cat=>{
+const h3=document.createElement('h3'); h3.textContent=cat.category; container.appendChild(h3);
+cat.questions.forEach((q,i)=>{
+const div=document.createElement('div'); div.className='quiz-question';
+let optsHTML='';
+q.options.forEach((opt,idx)=>{
+optsHTML+=`<button class="option-btn" onclick="checkAnswer('${cat.category}',${i},'${opt}')">${opt}</button>`;
+});
+div.innerHTML=`<b>Q${i+1}:</b> ${q.question}<br>${optsHTML}<span id="result_${cat.category}_${i}"></span>`;
+container.appendChild(div);
+});
+});
+document.getElementById('scoreDisplay').textContent='';
+}
+
+function checkAnswer(catName,index,selected){
+const cat=quizzes.find(c=>c.category===catName);
+const span=document.getElementById(`result_${catName}_${index}`);
+if(selected===cat.questions[index].answer){
+span.textContent=" ✅ Correct";
+span.className='correct';
+}else{
+span.textContent=` ❌ Incorrect (Answer: ${cat.questions[index].answer})`;
+span.className='incorrect';
+}
+updateScore();
+}
+
+function updateScore(){
+let total=0, correctCount=0;
+quizzes.forEach(cat=>{
+cat.questions.forEach((q,i)=>{
+const span=document.getElementById(`result_${cat.category}_${i}`);
+if(span && span.className==='correct') correctCount++;
+total++;
+});
+});
+document.getElementById('scoreDisplay').textContent=`Score: ${correctCount} / ${total}`;
+}
+
+// Add quiz question
+function addQuizQuestion(){
+const qText=document.getElementById('newQuestionText').value;
+const qAnswer=document.getElementById('newQuestionAnswer').value;
+const qCat=document.getElementById('newQuestionCategory').value;
+const qOpts=[document.getElementById('newOption1').value,
+document.getElementById('newOption2').value,
+document.getElementById('newOption3').value,
+document.getElementById('newOption4').value];
+if(qText && qAnswer && qOpts.every(o=>o)){
+const cat=quizzes.find(c=>c.category===qCat);
+cat.questions.push({question:qText, answer:qAnswer, options:qOpts});
+loadQuizzes();
+document.getElementById('newQuestionText').value='';
+document.getElementById('newQuestionAnswer').value='';
+document.getElementById('newOption1').value='';
+document.getElementById('newOption2').value='';
+document.getElementById('newOption3').value='';
+document.getElementById('newOption4').value='';
+alert("Quiz added");
+}
+}
+
+function loadQuizzes(){
+const list=document.getElementById('quizList'); list.innerHTML='';
+quizzes.forEach(cat=>{
+const li=document.createElement('li'); li.textContent=cat.category+" ("+cat.questions.length+" questions)";
+list.appendChild(li);
+});
+}
+
+// Modal Questions
+function showModalQuestions(){
+const container=document.getElementById('modalContainer'); container.innerHTML='';
+modalQs.forEach((q,i)=>{
+const div=document.createElement('div'); div.className='modal-question';
+div.innerHTML=`<b>Q${i+1}:</b> ${q.question} <br> Answer: ${q.answer}`;
+container.appendChild(div);
+});
+}
+
+// Gemini AI
+async function askGemini(){
+const question=document.getElementById('aiQuestion').value;
+if(!question){ alert("Type a question!"); return; }
+document.getElementById('aiAnswer').textContent="Thinking...";
+try{
+const response = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
+method:"POST",
+headers: {
+"Content-Type":"application/json",
+"x-goog-api-key": GEMINI_API_KEY
+},
+body: JSON.stringify({contents:[{parts:[{text:question}]}]})
+});
+const data = await response.json();
+document.getElementById('aiAnswer').textContent = data.candidates[0].content[0].text || "No response";
+}catch(e){ document.getElementById('aiAnswer').textContent="Error calling AI"; console.error(e); }
+}
+
+// Change password for students
+function changePassword(){
+const newPass = document.getElementById('newStudentPass').value;
+const username = document.getElementById('username').value;
+const student = users.find(u => u.username === username && u.type==="student");
+if(student && newPass){
+student.password = newPass; // update locally
+db.collection("students").doc(username).set({password:newPass},{merge:true})
+.then(()=>{ 
+document.getElementById('passChangeMsg').textContent="Password updated successfully in Firebase!";
+document.getElementById('newStudentPass').value='';
+alert("Password changed successfully!");
+})
+.catch(err=>{ document.getElementById('passChangeMsg').textContent="Error updating password in Firebase"; console.error(err); });
+}else{
+document.getElementById('passChangeMsg').textContent="Error updating password.";
+}
+}
+</script>
+</body>
+  </html>
